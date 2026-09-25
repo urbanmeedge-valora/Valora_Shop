@@ -619,17 +619,43 @@ function carouselHtml(p){
 const grid = document.getElementById('productGrid');
 const filterRow = document.getElementById('filterRow');
 
-async function loadProducts() {
+async function loadProducts() async function loadProducts() {
   try {
-    const response = await fetch(CONFIG.sheetWebAppUrl);
-    const sheetProducts = await response.json();
+    const sheetProducts = await new Promise((resolve, reject) => {
+      const callbackName = "productsCallback_" + Date.now();
+
+      const script = document.createElement("script");
+
+      window[callbackName] = function(data) {
+        delete window[callbackName];
+        script.remove();
+        resolve(data);
+      };
+
+      script.src =
+        CONFIG.sheetWebAppUrl +
+        "?callback=" +
+        callbackName;
+
+      script.onerror = function() {
+        delete window[callbackName];
+        script.remove();
+        reject(new Error("Could not load products from Google Sheets"));
+      };
+
+      document.body.appendChild(script);
+    });
 
     CONFIG.products = sheetProducts.map(p => ({
       id: p.SKU,
       name: String(p["Product Name"] || "").trim(),
       price: Number(p["Store Selling Price (₹)"]) || 0,
       mrp: Number(p["MRP (₹)"]) || 0,
-      desc: String(p["Short Description"] || p["Discription"] || "").trim(),
+      desc: String(
+        p["Short Description"] ||
+        p["Discription"] ||
+        ""
+      ).trim(),
       category: String(p["Category"] || "").trim(),
 
       images: [
@@ -640,7 +666,7 @@ async function loadProducts() {
       ].filter(Boolean)
     }));
 
-    renderProducts('All');
+    renderProducts("All");
 
   } catch (error) {
     console.error("Could not load products:", error);
